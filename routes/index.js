@@ -7,6 +7,12 @@ var query=model();
 console.log(app)
 //SERVICIOS jugador
 router.db=query;
+router.get('/',function(req,res){
+	res.render('index.jade');
+})
+router.get('/cliente',function(req,res){
+	res.render('jugador.jade');
+})
 router.get('/jugador', function(req, res, next) {
 	
 	var params=req.query;
@@ -44,8 +50,6 @@ router.post('/juego',function(){
 		res.send({id:r,status:'ok'});
 	});
 });
-
-//estadisticas
 
 
 

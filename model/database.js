@@ -93,7 +93,27 @@ var db = function()
 			});
 		});
 	}
+	this.getJuego=function(condicion,callback)
+	{
 
+		juegosmodel.find(condicion)
+		.populate('preguntas')
+		.exec(function(err,obj){
+			callback(obj);
+			//console.log(obj);
+		});
+	}
+	//AUTENTICAR USUARIO
+	this.auth=function(data,callback){
+		jugadormodel.find(data,function(err,rows){
+			if(err){
+				console.log('error');
+			}else{
+				//console.log(rows)
+				callback(rows);
+			}
+		})
+	}
 	return this;
 
 }

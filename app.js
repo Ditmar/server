@@ -8,7 +8,7 @@ var bodyParser = require('body-parser');
 
 var routes = require('./routes/index');
 var users = require('./routes/users');
-
+var mongoose = require('mongoose');
 var app = express();
 
 // view engine setup
@@ -63,48 +63,113 @@ var http=app.listen(port,function(){
 })
 //var model=require('./model/database');
 var query=routes.db;
-console.log(query);
 //construimos el socket
 var io = require('socket.io')(http);
 io.on('connection',function(socket){
   socket.emit('server',{server:'Conexión establecida'});
+  socket.on('onLog',function(params){
+    query.auth(params,function(obj){
+      if(obj.length==1){
+        socket.USER=obj[0];
+        socket.emit('onLog',{status:true,msn:"Autenticado Correctamente"});
+      }else{
+        socket.emit('onLog',{status:false,msn:"Error En la Autenticación"});
+      }
+    })
+    socket.USER=params.user;
+  });
   //conexion a un juego especifico
   socket.on('crear_partida',function(partida){
-    query.insertjuego(req.body,function(r){
-      
-      //se seleccionan las preguntas
+    //console.log(partida);
+    query.insertjuego(partida,function(r){
+      //console.log(r);
+      var datapartida=r;
       query.getPreguntas(function(rows){
-        var len=rows.length-1;
-        var semilla=Math.round(Math.random()*(len-2))+2;
-        var preguntas=[];
-        for(var i=0;i<partida.preguntas*2;i++)
+        var verificarrepetidas=function(item)
         {
-          var semilla=Math.round(Math.random()*len);
-          if(semilla%2==0)
+          for(var i=0;i<rep.length;i++)
           {
-            preguntas.push(rows[semilla%len]);
+            if(rep[i]==item)
+            {
+              return false;
+            }
           }
-          semilla++;
+          return true;
         }
-        query.updatePartida(r,{$preguntas:preguntas},{multi:true},function(err,affected){
-          console.log(affected);
-        });
-      });
+        rep=[];
+        while(rep.length!=3)
+        {
+        
+          var i=Math.round(Math.random()*(rows.length-1)) 
+          if(verificarrepetidas(i))
+          {
+            rep.push(i);
+            r.preguntas.push(rows[i]);
+          }
+        }
+        r.save(function(err){
+          if(err)
+          {
+            console.log("Error");
+          }else
+          {
+            query.getJuego(r,function(juego){
+              //comunicamos un juego creado
+              console.log('---------> '+juego[0]._id);
 
-      
-      //res.send({id:r,status:'ok'});
+              socket.join(juego[0]._id);
+              socket.emit('crear_partida',juego);
+              io.to('salaprincipal').emit('crear_partida',juego);
+            });
+          }
+        });
+
+      });
 
     })
   });
-  socket.on('unirse_juego',function(clientmsn){
-    socket.join(clientmsn.sala);
-    io.to(clientmsn.sala).emit({msn:clientmsn.nombres+" ha iniciado"});
+  socket.on('sala_principal',function(){
+    socket.join('salaprincipal');
+    io.to('salaprincipal').emit('sala_join',{msn:'Se ha Unido A la sala '+socket.USER.nombres});
   });
+  socket.on('unirse_juego',function(clientmsn){
+    socket.join(clientmsn.salita);
+    var id=clientmsn.salita;
+    query.getJuego({_id:mongoose.Types.ObjectId(id)},function(juego){
+      //console.log(juego.usuario);
+      juego[0].usuario.push(socket.USER);
+      juego[0].save(function(err){
+        if(err){
+          console.log('Error');
+        }else{
+          io.to(clientmsn.salita).emit('unirse_juego',{msn:socket.USER.nombres+' Se ha unido al juego'});
+        }
+      });
+    });
+  });
+  socket.on('dejar_sala',function(clientmsn){
+    
+    query.getJuego({_id:clientmsn.sala},function(juego){
+      for(var i=0;i<juego.usuario.length;i++)
+      {
+        if(juego.usuario._id=socket.USER._id)
+        {
+          juego.usuario.splite(i,1);
+        }
+      }
+      juego.save(function(err){
+        if(err){
+          console.log('Error')
+        }else{
+          io.to(clientmsn.sala).emit('dejar_sala',{msn:socket.USER.nombres+'  dejado el juego'});
+          socket.leave(clientmsn.sala);
+        }
+      });
+    });
+  });
+
   socket.on('listo_para_jugar',function(clientmsn){
     io.to(clientmsn.sala).emit({id:clientmsn._id,nombres:clientmsn.nombres,ready:true});
-  });
-  socket.on('enviar_set_preguntas',function(objpreguntas){
-     io.to(clientmsn.sala).emit(objpreguntas);
   });
 });
 
