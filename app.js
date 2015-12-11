@@ -66,19 +66,37 @@ var query=routes.db;
 //construimos el socket
 var io = require('socket.io')(http);
 io.on('connection',function(socket){
-  socket.emit('server',{server:'Conexión establecida'});
+  socket.emit('server',{server:'SERVER: Conexión establecida'});
+  
+  /*
+ Autenticacion de Usuarios
+  
+
+ params={email:'pepito@gmail.com',password:'554648'}
+  */
+
   socket.on('onLog',function(params){
+    console.log(params);
     query.auth(params,function(obj){
       if(obj.length==1){
+        console.log("Autenticacion correcta");
         socket.USER=obj[0];
+        //console.log('-->'+socket.USER);
         socket.emit('onLog',{status:true,msn:"Autenticado Correctamente"});
       }else{
+        console.log('Incorrecto');
         socket.emit('onLog',{status:false,msn:"Error En la Autenticación"});
       }
     })
-    socket.USER=params.user;
+    //socket.USER=params.user;
   });
+
   //conexion a un juego especifico
+
+  /*
+  partida =
+  {nombre:'prueba',estado:'nuevo',cantpreguntas:10}
+  */
   socket.on('crear_partida',function(partida){
     //console.log(partida);
     query.insertjuego(partida,function(r){
@@ -107,6 +125,9 @@ io.on('connection',function(socket){
             r.preguntas.push(rows[i]);
           }
         }
+
+        r.usuario.push(socket.USER); 
+        console.log(r);
         r.save(function(err){
           if(err)
           {
@@ -115,11 +136,14 @@ io.on('connection',function(socket){
           {
             query.getJuego(r,function(juego){
               //comunicamos un juego creado
-              console.log('---------> '+juego[0]._id);
-
+              
+              console.log(juego);
+              
               socket.join(juego[0]._id);
-              socket.emit('crear_partida',juego);
-              io.to('salaprincipal').emit('crear_partida',juego);
+              socket.emit('partida',juego);
+              //Nos comunicamos con aquellas pesonas que estan o son parte
+              // de la salaprincipal
+              io.to('salaprincipal').emit('emit_juego',juego);
             });
           }
         });
@@ -128,7 +152,11 @@ io.on('connection',function(socket){
 
     })
   });
+/*
+Este codigo nos une a la principal de todo el juego
+*/
   socket.on('sala_principal',function(){
+    console.log("ENTRAMOS A SALA PRINCIPAL");
     socket.join('salaprincipal');
     io.to('salaprincipal').emit('sala_join',{msn:'Se ha Unido A la sala '+socket.USER.nombres});
   });
@@ -138,10 +166,12 @@ io.on('connection',function(socket){
     query.getJuego({_id:mongoose.Types.ObjectId(id)},function(juego){
       //console.log(juego.usuario);
       juego[0].usuario.push(socket.USER);
+
       juego[0].save(function(err){
         if(err){
           console.log('Error');
         }else{
+
           io.to(clientmsn.salita).emit('unirse_juego',{msn:socket.USER.nombres+' Se ha unido al juego'});
         }
       });

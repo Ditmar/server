@@ -98,6 +98,7 @@ var db = function()
 
 		juegosmodel.find(condicion)
 		.populate('preguntas')
+		.populate('usuario')
 		.exec(function(err,obj){
 			callback(obj);
 			//console.log(obj);
